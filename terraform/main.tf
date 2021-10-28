@@ -88,7 +88,7 @@ module "eks" {
   worker_groups = [
     {
       name                          = "worker-group-1"
-      instance_type                 = "t2.small"
+      instance_type                 = "t2.medium"
       additional_userdata           = "echo foo bar"
       asg_desired_capacity          = 1
       additional_security_group_ids = [aws_security_group.worker_group_mgmt_one.id]
@@ -140,11 +140,11 @@ resource "kubernetes_deployment" "example" {
           image = "cjobe026/api_project:1.0"
           name  = "api-app"
           port {
-              container_port = 5000
+              container_port = 80
           }
           resources {
             limits {
-              cpu    = "0.5"
+              cpu    = "1"
               memory = "512Mi"
             }
             requests {
@@ -168,7 +168,7 @@ resource "kubernetes_service" "example" {
     }
     port {
       port        = 80
-      target_port = 5000
+      target_port = 80
     }
 
     type = "LoadBalancer"
