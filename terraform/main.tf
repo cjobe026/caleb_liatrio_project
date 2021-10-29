@@ -95,10 +95,6 @@ module "eks" {
     },
   ]
 
-  worker_additional_security_group_ids = [aws_security_group.all_worker_mgmt.id]
-  map_roles                            = var.map_roles
-  map_users                            = var.map_users
-  map_accounts                         = var.map_accounts
 }
 
 
@@ -111,11 +107,11 @@ provider "kubernetes" {
   version                = "~> 1.11"
 }
 
-resource "kubernetes_deployment" "example" {
+resource "kubernetes_deployment" "kube_deploy" {
   metadata {
-    name = "terraform-example"
+    name = "cloud-deploy"
     labels = {
-      test = "MyExampleApp"
+      test = "ApiApp"
     }
   }
 
@@ -124,14 +120,14 @@ resource "kubernetes_deployment" "example" {
 
     selector {
       match_labels = {
-        test = "MyExampleApp"
+        test = "ApiApp"
       }
     }
 
     template {
       metadata {
         labels = {
-          test = "MyExampleApp"
+          test = "ApiApp"
         }
       }
 
@@ -158,13 +154,13 @@ resource "kubernetes_deployment" "example" {
   }
 }
 
-resource "kubernetes_service" "example" {
+resource "kubernetes_service" "kube_LoadBalancer" {
   metadata {
-    name = "terraform-example"
+    name = "cloud-deploy"
   }
   spec {
     selector = {
-      test = "MyExampleApp"
+      test = "ApiApp"
     }
     port {
       port        = 80
