@@ -1,5 +1,11 @@
 terraform {
   required_version = ">= 0.14.0"
+    required_providers {
+    local = {
+      source = "hashicorp/local"
+      version = "2.1.0"
+    }
+  }
 }
 
 provider "aws" {
@@ -17,6 +23,8 @@ data "aws_eks_cluster_auth" "cluster" {
 
 data "aws_availability_zones" "available" {
 }
+
+
 
 resource "aws_security_group" "worker_group_mgmt_one" {
   name_prefix = "worker_group_mgmt_one"
@@ -106,6 +114,9 @@ provider "kubernetes" {
   load_config_file       = false
   version                = "~> 1.11"
 }
+provider "local" {
+  # Configuration options
+}
 
 resource "kubernetes_deployment" "kube_deploy" {
   metadata {
@@ -170,3 +181,106 @@ resource "kubernetes_service" "kube_LoadBalancer" {
     type = "LoadBalancer"
   }
 }
+
+resource "local_file" "init" {
+  content = templatefile("${path.module}/templates/apiCanaryBlueprint.tpl", {
+    load_balancer_endpoint = "${kubernetes_service.kube_LoadBalancer.load_balancer_ingress[0].hostname}"
+  })
+  filename = "${path.module}/files/apiCanaryBlueprint.js"
+}
+
+data "archive_file" "zipped_blue_print" {
+  type             = "zip"
+  source_file      = "${path.module}/files/apiCanaryBlueprint.js"
+  output_file_mode = "0666"
+  output_path      = "${path.module}/files/apiCanaryBlueprint.zip"
+  depends_on = [resource.local_file.init]
+}
+
+resource "random_pet" "pet_name" {
+  length    = 3
+  separator = "-"
+}
+
+# s3 bucket for storing synthetics canary test objects
+resource "aws_s3_bucket" "s3_test_storage" {
+  acl    = "private"
+  bucket = "${random_pet.pet_name.id}-bucket"
+  tags = {
+    Name        = "test_storage"
+    Environment = "Dev"
+  }
+}
+
+data "aws_iam_policy_document" "identity_policy" {
+  statement {
+    actions   = ["s3:PutObject","s3:GetBucketLocation","s3:ListAllMyBuckets","cloudwatch:PutMetricData","logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"]
+    resources = ["*"]
+    effect = "Allow"
+  }
+  statement {
+    actions   = ["s3:*"]
+    resources = [aws_s3_bucket.s3_test_storage.arn]
+    effect = "Allow"
+  }
+    statement {
+    actions = [
+      "cloudwatch:PutMetricData",
+    ]
+    resources = [
+      "*",
+    ]
+    condition {
+      test     = "StringEquals"
+      variable = "cloudwatch:namespace"
+
+      values = [
+        "CloudWatchSynthetics"
+      ]
+    }
+}
+}
+
+data "aws_iam_policy_document" "execution_role_policy" {
+    statement { 
+    actions   = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "policy" {
+  name        = "${random_pet.pet_name.id}-policy"
+  description = "execution role for testing api app"
+  policy = data.aws_iam_policy_document.identity_policy.json
+}
+
+resource "aws_iam_role" "execution_role_add" {
+  name = "execution_role"
+  assume_role_policy = data.aws_iam_policy_document.execution_role_policy.json
+}
+
+resource "aws_iam_role_policy_attachment" "attachment" {
+  role       = aws_iam_role.execution_role_add.name
+  policy_arn = aws_iam_policy.policy.arn
+}
+
+output "rendered_policy" {
+  value = aws_iam_role.execution_role_add.arn
+}
+
+resource "aws_synthetics_canary" "create_canary" {
+  name                 = "api-app-canary"
+  artifact_s3_location = "s3://${aws_s3_bucket.s3_test_storage.bucket}/"
+  execution_role_arn   = aws_iam_role.execution_role_add.arn
+  handler              = "exports.handler"
+  zip_file             = "files/apiCanaryBlueprint.zip"
+  runtime_version      = "syn-nodejs-puppeteer-3.3"
+
+  schedule {
+    expression = "rate(5 minutes)"
+  }
+}
+
