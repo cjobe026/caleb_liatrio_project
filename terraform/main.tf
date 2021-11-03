@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 0.14.0"
+  required_version = ">= 1.0.0"
     required_providers {
     local = {
       source = "hashicorp/local"
@@ -114,9 +114,6 @@ provider "kubernetes" {
   load_config_file       = false
   version                = "~> 1.11"
 }
-provider "local" {
-  # Configuration options
-}
 
 resource "kubernetes_deployment" "kube_deploy" {
   metadata {
@@ -186,14 +183,14 @@ resource "local_file" "init" {
   content = templatefile("${path.module}/templates/apiCanaryBlueprint.tpl", {
     load_balancer_endpoint = "${kubernetes_service.kube_LoadBalancer.load_balancer_ingress[0].hostname}"
   })
-  filename = "${path.module}/files/apiCanaryBlueprint.js"
+  filename = "${path.module}/files/canary_full/nodejs/node_modules/apiCanaryBlueprint.js"
 }
 
 data "archive_file" "zipped_blue_print" {
   type             = "zip"
-  source_file      = "${path.module}/files/apiCanaryBlueprint.js"
+  source_dir      = "${path.module}/files/canary_full"
   output_file_mode = "0666"
-  output_path      = "${path.module}/files/apiCanaryBlueprint.zip"
+  output_path      = "${path.module}/files/canary_full.zip"
   depends_on = [resource.local_file.init]
 }
 
@@ -210,8 +207,10 @@ resource "aws_s3_bucket" "s3_test_storage" {
     Name        = "test_storage"
     Environment = "Dev"
   }
+  force_destroy = true
 }
 
+#Work in progress
 data "aws_iam_policy_document" "identity_policy" {
   statement {
     actions   = ["s3:PutObject","s3:GetBucketLocation","s3:ListAllMyBuckets","cloudwatch:PutMetricData","logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"]
@@ -267,20 +266,17 @@ resource "aws_iam_role_policy_attachment" "attachment" {
   policy_arn = aws_iam_policy.policy.arn
 }
 
-output "rendered_policy" {
-  value = aws_iam_role.execution_role_add.arn
-}
-
 resource "aws_synthetics_canary" "create_canary" {
   name                 = "api-app-canary"
   artifact_s3_location = "s3://${aws_s3_bucket.s3_test_storage.bucket}/"
   execution_role_arn   = aws_iam_role.execution_role_add.arn
-  handler              = "exports.handler"
-  zip_file             = "files/apiCanaryBlueprint.zip"
+  handler              = "apiCanaryBlueprint.handler"
+  zip_file             = "files/canary_full.zip"
   runtime_version      = "syn-nodejs-puppeteer-3.3"
-
+  start_canary         = true
   schedule {
-    expression = "rate(5 minutes)"
+    expression = "rate(10 minutes)"
   }
+  depends_on = [data.archive_file.zipped_blue_print, resource.kubernetes_service.kube_LoadBalancer]
 }
 
