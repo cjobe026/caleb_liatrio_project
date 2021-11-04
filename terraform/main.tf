@@ -40,24 +40,7 @@ resource "aws_security_group" "worker_group_mgmt_one" {
     ]
   }
 }
-
-resource "aws_security_group" "all_worker_mgmt" {
-  name_prefix = "all_worker_management"
-  vpc_id      = module.vpc.vpc_id
-
-  ingress {
-    from_port = 22
-    to_port   = 22
-    protocol  = "tcp"
-
-    cidr_blocks = [
-      "10.0.0.0/8",
-      "172.16.0.0/12",
-      "192.168.0.0/16",
-    ]
-  }
-}
-
+# Create VPC
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "3.10.0"
@@ -81,7 +64,7 @@ module "vpc" {
     "kubernetes.io/role/internal-elb"             = "1"
   }
 }
-
+# Create EKS
 module "eks" {
   source       = "terraform-aws-modules/eks/aws"
   cluster_name    = var.cluster_name
@@ -96,8 +79,7 @@ module "eks" {
   worker_groups = [
     {
       name                          = "worker-group-1"
-      instance_type                 = "t2.medium"
-      additional_userdata           = "echo foo bar"
+      instance_type                 = "t2.small"
       asg_desired_capacity          = 1
       additional_security_group_ids = [aws_security_group.worker_group_mgmt_one.id]
     },
@@ -106,7 +88,7 @@ module "eks" {
 }
 
 
-
+# Create cluster
 provider "kubernetes" {
   host                   = data.aws_eks_cluster.cluster.endpoint
   cluster_ca_certificate = base64decode(data.aws_eks_cluster.cluster.certificate_authority.0.data)
@@ -115,6 +97,7 @@ provider "kubernetes" {
   version                = "~> 1.11"
 }
 
+# Kubernetes deploy
 resource "kubernetes_deployment" "kube_deploy" {
   metadata {
     name = "cloud-deploy"
@@ -162,6 +145,7 @@ resource "kubernetes_deployment" "kube_deploy" {
   }
 }
 
+# Create LB service on cluster
 resource "kubernetes_service" "kube_LoadBalancer" {
   metadata {
     name = "cloud-deploy"
@@ -179,13 +163,15 @@ resource "kubernetes_service" "kube_LoadBalancer" {
   }
 }
 
+#Render Blueprint from template
 resource "local_file" "init" {
   content = templatefile("${path.module}/templates/apiCanaryBlueprint.tpl", {
     load_balancer_endpoint = "${kubernetes_service.kube_LoadBalancer.load_balancer_ingress[0].hostname}"
   })
   filename = "${path.module}/files/canary_full/nodejs/node_modules/apiCanaryBlueprint.js"
 }
-
+    
+#Zipping Blueprint 
 data "archive_file" "zipped_blue_print" {
   type             = "zip"
   source_dir      = "${path.module}/files/canary_full"
@@ -194,12 +180,13 @@ data "archive_file" "zipped_blue_print" {
   depends_on = [resource.local_file.init]
 }
 
+#Random string generation
 resource "random_pet" "pet_name" {
   length    = 3
   separator = "-"
 }
 
-# s3 bucket for storing synthetics canary test objects
+# S3 bucket for storing synthetics canary test objects
 resource "aws_s3_bucket" "s3_test_storage" {
   acl    = "private"
   bucket = "${random_pet.pet_name.id}-bucket"
@@ -210,7 +197,7 @@ resource "aws_s3_bucket" "s3_test_storage" {
   force_destroy = true
 }
 
-#Work in progress
+# Policy creation
 data "aws_iam_policy_document" "identity_policy" {
   statement {
     actions   = ["s3:PutObject","s3:GetBucketLocation","s3:ListAllMyBuckets","cloudwatch:PutMetricData","logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"]
@@ -240,6 +227,7 @@ data "aws_iam_policy_document" "identity_policy" {
 }
 }
 
+# Role policy creation
 data "aws_iam_policy_document" "execution_role_policy" {
     statement { 
     actions   = ["sts:AssumeRole"]
@@ -250,22 +238,26 @@ data "aws_iam_policy_document" "execution_role_policy" {
   }
 }
 
+# Adding policy
 resource "aws_iam_policy" "policy" {
   name        = "${random_pet.pet_name.id}-policy"
   description = "execution role for testing api app"
   policy = data.aws_iam_policy_document.identity_policy.json
 }
-
+    
+# Creating a role with role policy
 resource "aws_iam_role" "execution_role_add" {
   name = "execution_role"
   assume_role_policy = data.aws_iam_policy_document.execution_role_policy.json
 }
-
+    
+# Policy attached to role
 resource "aws_iam_role_policy_attachment" "attachment" {
   role       = aws_iam_role.execution_role_add.name
   policy_arn = aws_iam_policy.policy.arn
 }
 
+# Canary created and started
 resource "aws_synthetics_canary" "create_canary" {
   name                 = "api-app-canary"
   artifact_s3_location = "s3://${aws_s3_bucket.s3_test_storage.bucket}/"
