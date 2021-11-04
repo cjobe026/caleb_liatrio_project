@@ -26,10 +26,10 @@ If changes are required for the [App](https://github.com/cjobe026/caleb_liatrio_
 Then upload it to the docker registry
 `docker push cjobe026/api_project:1.0`
 
-navigate to the terraform folder
+Navigate to the terraform folder
 `cd terraform`
 
-run terraform init and apply
+Run terraform init and apply
 `terraform init`
 `terraform apply`
 
