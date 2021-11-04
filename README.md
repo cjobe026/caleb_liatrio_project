@@ -5,6 +5,7 @@ CONTENTS OF THIS FILE
 ---------------------
  * Prerequisites
  * Installation
+ * Cleanup
  * Maintainers
 
 ## Prerequisites
@@ -32,6 +33,19 @@ run terraform init and apply
 `terraform init`
 `terraform apply`
 
+Confirm the application is running by acquiring the output url and putting it in a browser.
+
+For testing and monitoring results check the canary on [AWS Cloudwatch](https://aws.amazon.com/cloudwatch/).
+
+Use the output region and cluster in the following command to configure the Kubectl
+`aws eks --region <aws region> update-kubeconfig --name <cluster name>`
+
+verify that kubernetes pods have started
+`kubectl get pods`
+
+## Cleanup
+This will remove all components created during the deploy
+`terraform destroy`
 
  Current maintainers:
  * Caleb Jobe(cjobe026) - https://github.com/cjobe026
