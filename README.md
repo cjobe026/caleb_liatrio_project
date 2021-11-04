@@ -1,5 +1,5 @@
 # caleb_liatrio_project
-Interview project using cloud tools
+Interview project utilizing cloud natives tools.
 
 CONTENTS OF THIS FILE
 ---------------------
