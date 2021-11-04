@@ -47,5 +47,5 @@ verify that kubernetes pods have started
 This will remove all components created during the deploy
 `terraform destroy`
 
- Current maintainers:
+ ## Current maintainers:
  * Caleb Jobe(cjobe026) - https://github.com/cjobe026
