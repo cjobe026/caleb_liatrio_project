@@ -32,8 +32,6 @@ data "aws_eks_cluster_auth" "cluster" {
 data "aws_availability_zones" "available" {
 }
 
-
-
 resource "aws_security_group" "worker_group_mgmt_one" {
   name_prefix = "worker_group_mgmt_one"
   vpc_id      = module.vpc.vpc_id
@@ -48,6 +46,7 @@ resource "aws_security_group" "worker_group_mgmt_one" {
     ]
   }
 }
+
 # Create VPC
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
@@ -72,6 +71,7 @@ module "vpc" {
     "kubernetes.io/role/internal-elb"             = "1"
   }
 }
+
 # Create EKS
 module "eks" {
   source       = "terraform-aws-modules/eks/aws"
@@ -81,9 +81,7 @@ module "eks" {
   version = "17.22.0"
   cluster_create_timeout = "1h"
   cluster_endpoint_private_access = true 
-
   vpc_id = module.vpc.vpc_id
-
   worker_groups = [
     {
       name                          = "worker-group-1"
@@ -92,7 +90,6 @@ module "eks" {
       additional_security_group_ids = [aws_security_group.worker_group_mgmt_one.id]
     },
   ]
-
 }
 
 # Kubernetes deploy
@@ -106,7 +103,6 @@ resource "kubernetes_deployment" "kube_deploy" {
 
   spec {
     replicas = 2
-
     selector {
       match_labels = {
         test = "ApiApp"
@@ -119,7 +115,6 @@ resource "kubernetes_deployment" "kube_deploy" {
           test = "ApiApp"
         }
       }
-
       spec {
         container {
           image = "cjobe026/api_project:1.0"
@@ -168,7 +163,7 @@ resource "local_file" "init" {
   })
   filename = "${path.module}/files/canary_full/nodejs/node_modules/apiCanaryBlueprint.js"
 }
-    
+
 #Zipping Blueprint 
 data "archive_file" "zipped_blue_print" {
   type             = "zip"
@@ -222,7 +217,7 @@ data "aws_iam_policy_document" "identity_policy" {
         "CloudWatchSynthetics"
       ]
     }
-}
+  }
 }
 
 # Role policy creation
@@ -242,13 +237,13 @@ resource "aws_iam_policy" "policy" {
   description = "execution role for testing api app"
   policy = data.aws_iam_policy_document.identity_policy.json
 }
-    
+
 # Creating a role with role policy
 resource "aws_iam_role" "execution_role_add" {
   name = "execution_role"
   assume_role_policy = data.aws_iam_policy_document.execution_role_policy.json
 }
-    
+
 # Policy attached to role
 resource "aws_iam_role_policy_attachment" "attachment" {
   role       = aws_iam_role.execution_role_add.name
@@ -269,4 +264,3 @@ resource "aws_synthetics_canary" "create_canary" {
   }
   depends_on = [data.archive_file.zipped_blue_print, resource.kubernetes_service.kube_LoadBalancer]
 }
-
