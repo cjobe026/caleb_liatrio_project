@@ -35,7 +35,8 @@ Run terraform init and apply
 `terraform init`
 `terraform apply`
 
-Confirm the application is running by acquiring the output url and putting running pass it to pytest.
+Confirm the application is running by acquiring the LB output url and passing it to pytest.
+`cd ..`
 `python -m pytest --url <url>`
 
 For monitoring results check the canary on [AWS Cloudwatch](https://aws.amazon.com/cloudwatch/).
