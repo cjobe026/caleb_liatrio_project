@@ -19,7 +19,9 @@ For this deploy, you will need the following:
 - [Terraform](https://www.terraform.io/downloads.html)
 -   [kubectl](https://learn.hashicorp.com/tutorials/terraform/eks#kubectl)
 -   [wget](https://www.gnu.org/software/wget/)
-- Docker (For uploading app image)
+-   [Docker](https://docs.docker.com/get-docker/) (For uploading app image)
+-   [Python](https://www.python.org/downloads/) (for testing)
+	-  Also add the following `pip install pytest` and `pip install requests`
 ## Installation
 **Optional**
 If changes are required for the [App](https://github.com/cjobe026/caleb_liatrio_project/tree/main/docker)
@@ -33,10 +35,12 @@ Run terraform init and apply
 `terraform init`
 `terraform apply`
 
-Confirm the application is running by acquiring the output url and putting it in a browser.
+Confirm the application is running by acquiring the output url and putting running pass it to pytest.
+`python -m pytest --url <url>`
 
-For testing and monitoring results check the canary on [AWS Cloudwatch](https://aws.amazon.com/cloudwatch/).
+For monitoring results check the canary on [AWS Cloudwatch](https://aws.amazon.com/cloudwatch/).
 
+**Optional**
 Use the output region and cluster in the following command to configure the Kubectl
 `aws eks --region <aws region> update-kubeconfig --name <cluster name>`
 
